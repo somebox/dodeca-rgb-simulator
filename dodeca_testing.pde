@@ -22,7 +22,6 @@ PMatrix3D world;
  */
 
 float xv, yv, zv = 0;
-float hemi_off = 0;
 float radius = 200;
 int led_counter = 0;
 boolean first_pass = true;
@@ -53,7 +52,7 @@ void drawLED(int led_num) {
   translate(0, 0, 5);
   box(20, 20, 10);
   textSize(20);
-  text(led_num, 0, -25, 22);  // Specify a z-axis value
+  text(led_num, 0, -25, 2);  // Specify a z-axis value
 
   if (first_pass) {
     float x = modelX(0, 0, 0);
@@ -68,23 +67,22 @@ void drawLED(int led_num) {
 // Function to draw a pentagon at the specified side number
 void drawPentagon(float radius, int sideNumber) {
   pushMatrix();
-  float rot_offset = side_rotation[sideNumber]*TWO_PI/5;
 
   if (sideNumber == 0) {
-    rotateZ(radians(-18)+rot_offset);
+    rotateZ(radians(-18));
   } else if (sideNumber > 0 && sideNumber < 6) {
-    rotateZ(rot_offset-TWO_PI/5*(sideNumber)-radians(zv));
+    rotateZ(TWO_PI/5*(sideNumber)-radians(zv));
     rotateX(radians(xv));
     rotateY(radians(yv));
   } else if (sideNumber >= 6 && sideNumber < 11) {
-    rotateZ(rot_offset-TWO_PI/5*(sideNumber)+radians(zv));
+    rotateZ(TWO_PI/5*(sideNumber)+radians(zv));
     rotateX(PI - radians(xv));
   } else if (sideNumber == 11) {
     rotateX(radians(180));
-    rotateZ(radians(18)+rot_offset);
+    rotateZ(radians(18));
   }
 
-  translate(0, 0, radius*1.30+hemi_off); // Center the shape in the canvas
+  translate(0, 0, radius*1.30+2); // Center the shape in the canvas
   textSize(310);
   fill(130);
   textMode(SHAPE);
@@ -237,7 +235,6 @@ void draw_model() {
   text("xv: "+xv, 40, 30);
   text("yv: "+yv, 40, 50);
   text("zv: "+zv, 40, 70);
-  text("hemi_off: "+hemi_off, 40, 110);
   cam.endHUD();
 
   popMatrix();
@@ -259,8 +256,6 @@ void setup() {
   cam.setMaximumDistance(1000);
   xv = 63.4;
   zv = -18;
-  hemi_off = 2;
-
 }
 
 void draw() {
