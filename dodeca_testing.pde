@@ -45,24 +45,7 @@ class LedPoint {
 int NUM_LEDS = 26*12;
 ArrayList<LedPoint> leds = new ArrayList();
 // the rotations of each pentagon face, 0-4 (60 degree increments)
-int side_rotation[] = {0,1,0,0,0,0,0,0,0,0,0,0,0};
-
-void drawLED(int led_num) {
-  pushMatrix();
-  translate(0, 0, 5);
-  box(20, 20, 10);
-  textSize(20);
-  text(led_num, 0, -25, 2);  // Specify a z-axis value
-
-  if (first_pass) {
-    float x = modelX(0, 0, 0);
-    float y = modelY(0, 0, 0);
-    float z = modelZ(0, 0, 0);
-    leds.add(new LedPoint(x, y, z));
-  }
-
-  popMatrix();
-}
+int side_rotation[] = {0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // Function to draw a pentagon at the specified side number
 void drawPentagon(float radius, int sideNumber) {
@@ -87,7 +70,7 @@ void drawPentagon(float radius, int sideNumber) {
   fill(130);
   textMode(SHAPE);
   textAlign(CENTER, CENTER);
-  text(sideNumber, 0, -50, 2);  // Specify a z-axis value
+  text(sideNumber, 0, -50, 2);  // label the side number
 
   beginShape();
   fill(100);
@@ -135,6 +118,27 @@ void drawPentagon(float radius, int sideNumber) {
 
   popMatrix();
 }
+
+
+void drawLED(int led_num) {
+  pushMatrix();
+  fill(255);
+  translate(0, 0, 5);
+  box(20, 20, 10);
+  textSize(20);
+  text(led_num, -6, -15, 2);  // Specify a z-axis value
+
+  if (first_pass) {
+    float x = modelX(0, 0, 0);
+    float y = modelY(0, 0, 0);
+    float z = modelZ(0, 0, 0);
+    leds.add(new LedPoint(x, y, z));
+  }
+
+  popMatrix();
+}
+
+
 
 void keyPressed() {
   if (key == CODED) {
@@ -190,7 +194,7 @@ void exportCArray() {
     i++;
   }
   output.flush(); // Write the remaining data
-  output.close(); // Finish the file 
+  output.close(); // Finish the file
 }
 
 
@@ -220,6 +224,87 @@ void draw_points() {
     popMatrix();
   }
 }
+
+void draw_axes() {
+  pushMatrix();
+  stroke(200);
+  textSize(60);
+  int label_loc = 500;
+
+  line(-1000, 0, 0, 1000, 0, 0); // x axis
+  text("X", label_loc, 0, 0);  // Specify a z-axis value
+
+  line(0, -1000, 0, 0, 1000, 0); // y axis
+  text("Y", 0, label_loc, 0);  // Specify a z-axis value
+
+  line(0, 0, -1000, 0, 0, 1000); // z axis
+  text("Z", 0, 0, label_loc);  // Specify a z-axis value
+
+  popMatrix();
+}
+
+void new_draw_side(){
+  float angle = TWO_PI / 5;  // 72 degrees
+
+  // draw pentagon shape
+  pushMatrix();
+  
+  pushMatrix();
+  rotateZ(PI/10);
+  beginShape();
+  fill(100);
+  for (int i = 0; i < 5; i++) {
+    // Calculate the x, y, z coordinates of each point on the pentagon
+    float x = radius * cos(angle * i);
+    float y = radius * sin(angle * i);
+    float z = 0;
+    vertex(x, y, z);
+  }
+  endShape(CLOSE);
+  popMatrix();
+
+  // draw center LED
+  rotateZ(angle/4);
+  drawLED(1);
+
+  // draw inner circle of 10 LEDs
+  rotateZ(PI*2/10);  // ring is rotated by one position
+  for (int i=0; i<10; i++) {
+    pushMatrix();
+    float rot = PI*2/10;
+    rotateZ(-rot*i);
+    translate(0, radius/2.5, 0);
+    drawLED(2+i);
+    popMatrix();
+  }
+  
+  // draw outer ring of 15 LEDs
+  rotateZ(-PI/5);  
+  for (int i=0; i<5; i++) {
+    pushMatrix();
+    rotateZ(-PI*2/5*i+radians(18));
+    translate(0, radius*0.65, 0);
+    for (int j=0; j<3; j++) {
+      pushMatrix();
+      translate(-60+j*60, 0, 0);
+      drawLED(12+i*3+j);
+      popMatrix();
+    }
+    popMatrix();
+  }
+  
+  popMatrix();
+
+}
+
+void new_draw_model() {
+  pushMatrix();
+  //translate(0, 0, radius*1.30+2); // Center the shape in the canvas  
+  rotateZ(0);
+  new_draw_side();
+  popMatrix();
+}
+
 
 void draw_model() {
   pushMatrix();
@@ -251,7 +336,7 @@ void setup() {
   //fullScreen(P3D);
   size(800, 800, P3D);
   world = getMatrix(world);
-  cam = new PeasyCam(this, 900);
+  cam = new PeasyCam(this, 1000);
   cam.setMinimumDistance(200);
   cam.setMaximumDistance(1000);
   xv = 63.4;
@@ -264,5 +349,7 @@ void draw() {
   directionalLight(255, 255, 255, 150, 150, 0);
 
   //draw_points();
-  draw_model();
+  //draw_model();
+  draw_axes();
+  new_draw_model();
 }
