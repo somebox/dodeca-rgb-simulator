@@ -37,28 +37,28 @@ class LedPoint {
     this.y = y;
     this.z = z;
     this.index = led_counter++;
-    print(index+": ");
-    print(x, y, z, "\n");
+    //print(index+": ");
+    //print(x, y, z, "\n");
   }
 }
 
 int NUM_LEDS = 26*12;
 ArrayList<LedPoint> leds = new ArrayList();
 // the rotations of each pentagon face, 0-4 (60 degree increments)
-int side_rotation[] = {0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int side_rotation[] = {0, 3, 4, 4, 4, 4, 2, 2, 2, 2, 2, 0, 0};
 
 // Function to draw a pentagon at the specified side number
 void drawPentagon(float radius, int sideNumber) {
   pushMatrix();
-
+  float ro = TWO_PI/5;
   if (sideNumber == 0) {
-    rotateZ(radians(-18));
+    rotateZ(radians(-18)-ro*2);
   } else if (sideNumber > 0 && sideNumber < 6) {
-    rotateZ(TWO_PI/5*(sideNumber)-radians(zv));
+    rotateZ(ro*(sideNumber)-radians(zv)-ro);
     rotateX(radians(xv));
     rotateY(radians(yv));
   } else if (sideNumber >= 6 && sideNumber < 11) {
-    rotateZ(TWO_PI/5*(sideNumber)+radians(zv));
+    rotateZ(ro*(sideNumber)+radians(zv)+ro*3);
     rotateX(PI - radians(xv));
   } else if (sideNumber == 11) {
     rotateX(radians(180));
@@ -91,6 +91,7 @@ void drawPentagon(float radius, int sideNumber) {
 
   // draw LEDs
   fill(255);
+  rotateZ(ro*side_rotation[sideNumber]);  // config of face rotations
   // center LED
   drawLED(1);
   // inner ring of 10 LEDs
@@ -159,10 +160,10 @@ void keyPressed() {
   } else {
     switch (key) {
     case ',':
-      xv-= 0.1;
+      xv-= 1;
       break;
     case '.':
-      xv+= 0.1;
+      xv+= 1;
       break;
     }
   }
@@ -198,6 +199,82 @@ void exportCArray() {
 }
 
 
+
+void show_HUD(){
+  cam.beginHUD();
+  textSize(20);
+  fill(255);
+  textAlign(LEFT, TOP);
+  text("xv: "+xv, 40, 30);
+  text("yv: "+yv, 40, 50);
+  text("zv: "+zv, 40, 70);
+  cam.endHUD();
+
+}
+
+
+
+
+void setup() {
+  //fullScreen(P3D);
+  size(800, 800, P3D);
+  world = getMatrix(world);
+  cam = new PeasyCam(this, 1000);
+  cam.setMinimumDistance(200);
+  cam.setMaximumDistance(1000);
+  xv = 63.4;
+  zv = -18;
+}
+
+// 
+// connection points:
+// side 0 = (bottom) our 12,13,14 (B) to side 1 in 21,22,23 (E)
+// side 1 out 24,25,26 (A) to side 2 IN 21,23,23 (E)
+// side 2 out 12,13,14 (B) to side 3 IN 21,23,23 (E)
+// side 3 out 12,13,14 (B) to side 4 IN 21,23,23 (E)
+// side 4 out 12,13,14 (B) to side 5 IN 21,23,23 (E)
+// side 5 out 15,16,17 (C) to side 6 IN 18,19,20 (D)
+// --> JST jumps between hemispheres
+// side 6 out 24,25,26 (A) to side 7 IN 15,16,17 (C)
+// side 7 out 24,25,26 (A)to side 8 IN 15,16,17 (C)
+// side 8 out 24,25,26 (A)to side 9 IN 15,16,17 (C)
+// side 9 out 24,25,26 (A)to side 10 IN 15,16,17 (C)
+// side 10 out 12,13,14 (B) to side 11 (top) IN 21,22,23 (E)
+
+
+void draw() {
+  background(0);
+  lights();
+  directionalLight(255, 255, 255, 150, 150, 0);
+
+  //draw_points();
+  draw_model();
+  //draw_axes();
+  //new_draw_model();
+  //show_HUD();
+  
+}
+
+
+
+void draw_model() {
+  pushMatrix();
+  // Draw the dodecahedron
+  for (int i = 0; i < 12; i++) {
+    drawPentagon(radius, i);
+  }
+
+  // this.setMatrix(world);
+  popMatrix();
+
+  if (first_pass) {
+    // exportJSON();
+    exportCArray();
+    first_pass = false;
+  }
+}
+
+
 static float ci = 0;
 static int target = 80;
 void draw_points() {
@@ -225,10 +302,20 @@ void draw_points() {
   }
 }
 
+
+
+
+
+
+
+/// parking lot
+
+
 void draw_axes() {
   pushMatrix();
   stroke(200);
   textSize(60);
+  fill(255);
   int label_loc = 500;
 
   line(-1000, 0, 0, 1000, 0, 0); // x axis
@@ -243,12 +330,11 @@ void draw_axes() {
   popMatrix();
 }
 
-void new_draw_side(){
+
+void new_draw_side(int side_num){
   float angle = TWO_PI / 5;  // 72 degrees
 
   // draw pentagon shape
-  pushMatrix();
-  
   pushMatrix();
   rotateZ(PI/10);
   beginShape();
@@ -293,63 +379,46 @@ void new_draw_side(){
     popMatrix();
   }
   
+  // label the side number 
+  pushMatrix();
+  textSize(40);
+  fill(150,255,100);
+  rotateZ(PI/10*-5);
+  text(side_num, -10, -20, 2);  // Specify a z-axis value
+  popMatrix();
+
+  // label the five edges A-E
+  pushMatrix();
+  rotateZ(PI/10);
+  rotateZ(TWO_PI/5);  
+    
+  for (int side_label=0; side_label<5; side_label++){
+    char letter = char(side_label+65);
+    fill(0,0,0);  
+    textSize(20);
+    text(letter, -10, radius*0.8, 2);  // Specify a z-axis value
+    rotateZ(-TWO_PI/5);
+  }
   popMatrix();
 
 }
 
 void new_draw_model() {
   pushMatrix();
-  //translate(0, 0, radius*1.30+2); // Center the shape in the canvas  
-  rotateZ(0);
-  new_draw_side();
+  // top side (#0)
+  translate(0, 0, radius*1.30+2); // Center the shape in the canvas  
+  //rotateZ(TWO_PI/5);
+  new_draw_side(0);
   popMatrix();
-}
-
-
-void draw_model() {
+  
+  // side #1
   pushMatrix();
-  // Draw the dodecahedron
-  for (int i = 0; i < 12; i++) {
-    drawPentagon(radius, i);
-  }
-
-  // this.setMatrix(world);
-  cam.beginHUD();
-  textSize(20);
-  textAlign(LEFT, TOP);
-  text("xv: "+xv, 40, 30);
-  text("yv: "+yv, 40, 50);
-  text("zv: "+zv, 40, 70);
-  cam.endHUD();
-
+  rotateZ(-TWO_PI/10*2);
+  rotateZ(radians(zv));
+  rotateY(radians(yv));
+  rotateX(radians(xv));
+  translate(0, 0, radius*1.30+2); // Center the shape in the canvas
+  new_draw_side(1);
   popMatrix();
-
-  if (first_pass) {
-    // exportJSON();
-    exportCArray();
-    first_pass = false;
-  }
-}
-
-
-void setup() {
-  //fullScreen(P3D);
-  size(800, 800, P3D);
-  world = getMatrix(world);
-  cam = new PeasyCam(this, 1000);
-  cam.setMinimumDistance(200);
-  cam.setMaximumDistance(1000);
-  xv = 63.4;
-  zv = -18;
-}
-
-void draw() {
-  background(0);
-  lights();
-  directionalLight(255, 255, 255, 150, 150, 0);
-
-  //draw_points();
-  //draw_model();
-  draw_axes();
-  new_draw_model();
+  
 }
