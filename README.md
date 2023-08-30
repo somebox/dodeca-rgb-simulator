@@ -1,9 +1,12 @@
 # DodecaRGB Simulator 
 
+<img width="700" alt="Screenshot 2023-08-30 at 17 14 24" src="https://github.com/somebox/dodeca-rgb-simulator/assets/7750/26a079d8-aabb-4b0e-907a-5e34e593b98c">
 
  DodecaRGB is an interactive light gadget assembled from 12 PCBs with addressable LEDs. Once put
  together, the model can be programmed to do animations or other things. The prototype was
  developed for CCC Camp 2023 in Germany, and some early kits were sold. 
+
+<img width="500" alt="photo of dodecahedron LED model" src="https://github.com/somebox/dodeca-rgb-simulator/assets/7750/7173f4cf-216a-431c-add5-cadc7f9385f9">
  
  A dodecahedron is a 3d shape with 12 sides, each side is a pentagon made up of 5 equal edges.
  The top and bottom of the pentagon are parallel. 
@@ -27,4 +30,6 @@
  - Homepage: (Jeremy Seitz): https://somebox.com/projects
  - Firmware: https://github.com/somebox/DodecaRGB-firmware
  - Maths: https://math.stackexchange.com/questions/1320661/efficient-construction-of-a-dodecahedron
- 
+
+
+![DodecaRGB-toss](https://github.com/somebox/dodeca-rgb-simulator/assets/7750/a48687d6-057b-425c-9e13-a75692df122e)
