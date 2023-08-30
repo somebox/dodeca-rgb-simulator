@@ -21,6 +21,7 @@
 # Processing files              #
 #################################
 sketch.properties
+*.autosave
 applet
 application.macosx
 build-tmp/
