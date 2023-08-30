@@ -2,84 +2,130 @@ import peasy.*;
 PeasyCam cam;
 PMatrix3D world;
 
-
 /*
- I need to render a 3d dodecohedron using processing language.
- I am using processing 3d renderer and basic primatives, vertexes and translations.
  
- A pentagon is a 3d shape with 12 sides, and each side is a pentagon made up of 5 equal lines.
- The top and bottom of the pentagon are parallel. In a regular dodecaheron, each side is connected to
- five other pentagons, and the center of all 12 sides are exactly the same distance (radius) from the center
- of the shape.
+ DodecaRGB is an interactive light gadget assembled from 12 PCBs with addressable LEDs. Once put
+ together, the model can be programmed to do animations or other things. The prototype was
+ developed for CCC Camp 2023 in Germany, and some early kits were sold. 
  
- I would like to have a function which takes two parameters:
- radius and a side number (0-11), and draws the five points of the given pentagon as a closed shape
- at the correct location and angle. By calling this function 12 times, a full dodecoheron should be rendered.
- the code should use the processing language (documentation available at processing.org),
- use the P3D renderer, and can use draw methods like beginShape(), endShape(), vertex(), rotateX(),
- pushMatrix(), and so forth.
+ A dodecahedron is a 3d shape with 12 sides, each side is a pentagon made up of 5 equal edges.
+ The top and bottom of the pentagon are parallel. 
+ 
+ All of the LEDs are connected in a continuous strand, and each PCB has inputs and outputs on 
+ each side (labeled A-E), which need to be connected together in a specific order. This sketch
+ helped in figuring out how to best do that and work out the math involved.
+
+ This Processing sketch renders the DodecaRGB model in 3D, with the layout of LEDs and 
+ sides numbered. There is a menu displayed and a few options to change the view mode and write
+ the data file (if not present).
+ 
+ This sketch can output the points with calculated X,Y,Z coordiates for all 312 LEDs (26 per side), 
+ both as a JSON file and a C++ header file containing an array. This is useful for
+ programming the firmware and developing your own animations.
+
+ Requires Processing v4.3 or later
+
+ References:
+ - Hackaday page: https://hackaday.io/project/192557-dodecargb
+ - Homepage: (Jeremy Seitz): https://somebox.com/projects
+ - Firmware: https://github.com/somebox/DodecaRGB-firmware
+ - Maths: https://math.stackexchange.com/questions/1320661/efficient-construction-of-a-dodecahedron
  
  */
 
-float xv, yv, zv = 0;
-float radius = 200;
 int led_counter = 0;
-boolean first_pass = true;
+boolean write_points = false;
 
+// Appearance config
+color side_color = #8888AA;
+color led_color  = #EEFFDD;
+color label_color = #333333;
+color brighter_color = #AAAADD;
+
+// interactive settings
+boolean xray=false;   // see-through
+boolean show_axes=false; // display the X,Y,Z axes lines
+int view_mode=0; // 0..5, different views of the model for documentation
+int last_second = 0; // tracks the time
+String view_modes[] = {"normal", "bottom", "top", "build seq","3d points"};
+int build_step = 0; 
+
+float xv = 1.1071;  // angle between faces: PI - 2*Math.atan((1+Math.sqrt(5))/2), or around 63.4 degrees
+float zv = PI/10;  // pentagon top/bottom halves must be rotated 36 degrees in either direction to fit
+
+float radius = 200;    
+int NUM_LEDS = 26*12;
+ArrayList<LedPoint> leds = new ArrayList();
+// The rotations of each pentagon face, 0-4 (60 degree increments)
+// This is important for aligning the PCBs correctly.
+int side_rotation[] = {0, 3, 4, 4, 4, 4, 2, 2, 2, 2, 4, 0};
+
+// structure used to track info about each LED for coordinates and outputting data.
 class LedPoint {
-  public int index;
+  public int index, side, label_num = 0;
   public float x, y, z;
-  public float a, c;
-  public int r, g, b;
 
-  public LedPoint(float x, float y, float z) {
+  // constructor
+  public LedPoint(float x, float y, float z, int side, int label_num) {
     this.x = x;
     this.y = y;
     this.z = z;
+    this.side = side;
+    this.label_num = label_num;
     this.index = led_counter++;
-    //print(index+": ");
-    //print(x, y, z, "\n");
   }
 }
 
-int NUM_LEDS = 26*12;
-ArrayList<LedPoint> leds = new ArrayList();
-// the rotations of each pentagon face, 0-4 (60 degree increments)
-int side_rotation[] = {0, 3, 4, 4, 4, 4, 2, 2, 2, 2, 2, 0, 0};
 
-// Function to draw a pentagon at the specified side number
-void drawPentagon(float radius, int sideNumber) {
+// Function to draw a pentagon, labels and LEDs in the current coordinates.
+void drawPentagon(int sideNumber) {
   pushMatrix();
+  
+  // rotate current side into position
   float ro = TWO_PI/5;
-  if (sideNumber == 0) {
+  if (sideNumber == 0) {  // bottom
     rotateZ(radians(-18)-ro*2);
-  } else if (sideNumber > 0 && sideNumber < 6) {
-    rotateZ(ro*(sideNumber)-radians(zv)-ro);
-    rotateX(radians(xv));
-    rotateY(radians(yv));
-  } else if (sideNumber >= 6 && sideNumber < 11) {
-    rotateZ(ro*(sideNumber)+radians(zv)+ro*3);
-    rotateX(PI - radians(xv));
-  } else if (sideNumber == 11) {
+  } else if (sideNumber > 0 && sideNumber < 6) {  // bottom half
+    rotateZ(ro*(sideNumber)+zv-ro);
+    rotateX(xv);
+  } else if (sideNumber >= 6 && sideNumber < 11) { // top half
+    rotateZ(ro*(sideNumber)-zv+ro*3);
+    rotateX(PI - xv);
+  } else if (sideNumber == 11) { // top
     rotateX(radians(180));
     rotateZ(radians(18));
   }
 
-  translate(0, 0, radius*1.30+2); // Center the shape in the canvas
-  textSize(310);
-  fill(130);
+  // Center the pentagon face in the canvas, used for drawing
+  translate(0, 0, radius*1.31); // roughly Math.atan(2+Math.sqrt(5)), trial-and-error 
+
+  // label the current side with a big number
+  pushMatrix();
+  textSize(270);
+  if (xray==true){
+    fill(50, 180);
+  } else {
+    fill(brighter_color, 255);
+  }
   textMode(SHAPE);
   textAlign(CENTER, CENTER);
   text(sideNumber, 0, -50, 2);  // label the side number
+  if (xray==false){
+    rotateY(PI);
+    text(sideNumber, 0, -50, 2);  // label the side number on the back
+  }
+  popMatrix();
 
+  // draw the pentagon
   beginShape();
-  fill(100);
+  fill(side_color,xray ? 50 : 255);
+  stroke(0);
   float z = 0; // Distance between the center and side plane
   float angle = TWO_PI / 5;
   if (sideNumber >= 6 && sideNumber < 11) {
-    rotateZ(radians(-zv));
+    rotateZ(zv);
   } else {
-    rotateZ(radians(zv));
+    rotateZ(-zv);
   }
   for (int i = 0; i < 5; i++) {
     // Calculate the x, y, z coordinates of each point on the pentagon
@@ -89,20 +135,22 @@ void drawPentagon(float radius, int sideNumber) {
   }
   endShape(CLOSE);
 
-  // draw LEDs
-  fill(255);
+  // adust for side rotations due to model assembly
   rotateZ(ro*side_rotation[sideNumber]);  // config of face rotations
-  // center LED
-  drawLED(1);
+  
+  // draw center LED
+  drawLED(1,sideNumber); // led 1, side 0
+  
   // inner ring of 10 LEDs
   for (int i=0; i<10; i++) {
     pushMatrix();
     float rot = PI*2/10;
     rotateZ(-rot*i+rot);
     translate(0, radius/2.5, 0);
-    drawLED(2+i);
+    drawLED(i+2, sideNumber); // LEDs 2-11
     popMatrix();
   }
+  
   // outer pentagon of 15 LEDs
   for (int i=0; i<5; i++) {
     pushMatrix();
@@ -111,9 +159,20 @@ void drawPentagon(float radius, int sideNumber) {
     for (int j=0; j<3; j++) {
       pushMatrix();
       translate(-60+j*60, 0, 0);
-      drawLED(12+i*3+j);
+      drawLED(12+i*3+j, sideNumber); // LEDs 12-26
       popMatrix();
     }
+    
+    // draw connection letter label (A-E) on back side of each face, like on the PCBs
+    pushMatrix();
+    rotateY(PI);
+    textSize(60);
+    fill(label_color, xray ? 150 : 255);
+    textMode(SHAPE);
+    textAlign(CENTER, CENTER);
+    text(char(65+(i+1)%5), 0, -20, 3);  // label the side number
+    popMatrix();
+    
     popMatrix();
   }
 
@@ -121,51 +180,72 @@ void drawPentagon(float radius, int sideNumber) {
 }
 
 
-void drawLED(int led_num) {
+// draws a single LED at the current coordinates and labels it,
+// while recording the position and info for later.
+void drawLED(int led_num, int sideNumber) {
   pushMatrix();
-  fill(255);
-  translate(0, 0, 5);
+  // draw a box for the LED
+  fill(led_color, xray ? 70 : 255);
+  if (xray == true){
+    stroke(led_color);
+  } else {
+    noStroke();
+  }
+  translate(0, 0, 6);
   box(20, 20, 10);
+  // label the led number
   textSize(20);
-  text(led_num, -6, -15, 2);  // Specify a z-axis value
+  textAlign(CENTER, CENTER);
+  fill(xray ? 255 : label_color, xray ? 150 : 255);
+  text(led_num, 0, -25, 2);  // Specify a z-axis value
 
-  if (first_pass) {
+  // during first pass, record the calculated X,Y,Z coordinates of the model 
+  // for saving later as JSON and C header files.
+  if (write_points) {
     float x = modelX(0, 0, 0);
     float y = modelY(0, 0, 0);
     float z = modelZ(0, 0, 0);
-    leds.add(new LedPoint(x, y, z));
+    leds.add(new LedPoint(x, y, z, sideNumber, led_num));
   }
 
   popMatrix();
 }
 
 
+int data_written = 0;
+void show_HUD(){
+  cam.beginHUD();
+  textMode(MODEL);
+  textSize(20);
+  fill(255);
+  textAlign(LEFT, TOP);
+ 
+  text("[v] view mode: "+view_modes[view_mode], 40, 30);
+  text("[a] show axes: "+show_axes, 40, 50);
+  text("[x] x-ray mode: "+xray, 40, 70);
+  text("[w] write data: "+(data_written > 0 ? "DONE!" : ""), 40, 90);
+  text("fps "+round(frameRate), 40, 110);
+  cam.endHUD();
+}
 
 void keyPressed() {
-  if (key == CODED) {
-    switch (keyCode) {
-      case (UP):
-      zv++;
-      break;
-      case (DOWN):
-      zv--;
-      break;
-      case (LEFT):
-      yv--;
-      break;
-      case (RIGHT):
-      yv++;
-      break;
-    }
-  } else {
-    switch (key) {
-    case ',':
-      xv-= 1;
-      break;
-    case '.':
-      xv+= 1;
-      break;
-    }
+  switch (key) {
+  case 'v':  // cycle between view modes
+    view_mode = (view_mode+1) % 5;
+    break;
+  case 'x':
+    xray = !xray;
+    break;
+  case 'a':
+    show_axes = !show_axes;
+    break;
+  case 'w':  // write data points and reset things
+    write_points = true;
+    leds.clear();
+    led_counter = 0;
+    view_mode = 0;
+    data_written = 5; // delay is seconds for confirmation message in HUD
+    break;
   }
 }
 
@@ -174,10 +254,12 @@ void exportJSON() {
   int i = 0;
   for (LedPoint led : leds) {
     JSONObject pos = new JSONObject();
-    pos.setInt("id", led.index);
-    pos.setFloat("x", led.x);
-    pos.setFloat("y", led.y);
-    pos.setFloat("z", led.z);
+    pos.setInt("index", led.index);
+    pos.setFloat("x", round(led.x*100)/100.0);
+    pos.setFloat("y", round(led.y*100)/100.0);
+    pos.setFloat("z", round(led.z*100)/100.0);
+    pos.setInt("led_num", led.label_num);
+    pos.setInt("side", led.side);
     doc.setJSONObject(i, pos);
     i++;
   }
@@ -185,45 +267,37 @@ void exportJSON() {
 }
 
 void exportCArray() {
-  int i = 0;
   // open a text file in data dir
   PrintWriter output = createWriter("data/points.h");
+  output.println("/*\r\nThis file was generated \r\n"+
+    "from a Processing sketch which outputs all of the points in the DodecaLED model.");
+  output.println("Generated on "+day()+"."+month()+"."+year()+" - "+hour()+":"+minute());
+  output.println("radius: "+radius+" num_leds:"+NUM_LEDS);
+  output.println("--------------");
+  output.println("format: index, x, y, z, led_label, side_number");
+  output.println("*/");
+  
   for (LedPoint led : leds) {
     // write each point to the file as a C array
     // XYZ points[0] = {0, 0, 0};
-    output.println("XYZ("+led.x+", "+led.y+", "+led.z+"),");
-    i++;
+    output.println("XYZ(" + led.index +
+                     ", "+round(led.x*100)/100.0 +
+                     ", "+round(led.y*100)/100.0 +
+                     ", "+round(led.z*100)/100.0 +
+                     ", "+led.label_num +
+                     ", "+led.side +
+                     "),");
   }
   output.flush(); // Write the remaining data
   output.close(); // Finish the file
 }
 
-
-
-void show_HUD(){
-  cam.beginHUD();
-  textSize(20);
-  fill(255);
-  textAlign(LEFT, TOP);
-  text("xv: "+xv, 40, 30);
-  text("yv: "+yv, 40, 50);
-  text("zv: "+zv, 40, 70);
-  cam.endHUD();
-
-}
-
-
-
-
 void setup() {
-  //fullScreen(P3D);
   size(800, 800, P3D);
   world = getMatrix(world);
   cam = new PeasyCam(this, 1000);
   cam.setMinimumDistance(200);
   cam.setMaximumDistance(1000);
-  xv = 63.4;
-  zv = -18;
 }
 
 // 
@@ -245,14 +319,21 @@ void setup() {
 void draw() {
   background(0);
   lights();
-  directionalLight(255, 255, 255, 150, 150, 0);
+  directionalLight(100, 100, 100, 400, 400, 0);
+  ambientLight(50,50,50);
 
-  //draw_points();
-  draw_model();
-  //draw_axes();
-  //new_draw_model();
-  //show_HUD();
-  
+  if (show_axes==true) draw_axes();
+  if (view_mode==4){
+    draw_points();   
+  } else {
+    draw_model();
+  }
+  show_HUD();
+  if (millis()/1000 > last_second){
+    last_second = millis()/1000;
+    build_step = (build_step+1) % 12;
+    data_written = max(0, data_written - 1);
+  }
 }
 
 
@@ -261,59 +342,68 @@ void draw_model() {
   pushMatrix();
   // Draw the dodecahedron
   for (int i = 0; i < 12; i++) {
-    drawPentagon(radius, i);
+    if (view_mode==1 && i>5) continue;
+    if (view_mode==2 && i<6) continue;
+    if (view_mode==3 && build_step < i) continue;
+    drawPentagon(i);
   }
-
-  // this.setMatrix(world);
   popMatrix();
 
-  if (first_pass) {
-    // exportJSON();
+  if (write_points) {
+    exportJSON();
     exportCArray();
-    first_pass = false;
+    write_points = false;
   }
 }
 
 
-static float ci = 0;
-static int target = 80;
+// verify the written data displays correctly, and run a simulated LED animation on the Z axis
+float z_pos = 0;
+int target = 60; // used for animation, fading points when they are near the counter
+JSONArray doc;
 void draw_points() {
-  JSONArray doc;
-  doc = loadJSONArray("data/points.json");
-  for (int i=0; i<doc.size(); i++) {
-    JSONObject p = doc.getJSONObject(i);
-    float x = p.getFloat("x");
-    float y = p.getFloat("y");
-    float z = p.getFloat("z");
-    color c = color(80, 80, 80);
-    float d = (ci-z);
-    if (abs(d) < target) {
-      float off = target - abs(d);
-      c = color(target+off*2, target+off*2, target);
+  if (doc == null){
+    doc = loadJSONArray("data/points.json");
+  }
+  if (doc == null) {
+    textAlign(CENTER, CENTER);
+    textSize(100);
+    text("no data file.\nPress 'w' to write.", 0, 0);
+  } else {
+    // display data
+    for (int i=0; i<doc.size(); i++) {
+      JSONObject p = doc.getJSONObject(i);
+      float x = p.getFloat("x");
+      float y = p.getFloat("y");
+      float z = p.getFloat("z");
+      color c = color(80, 80, 80);
+      float d = (z_pos-z);
+      if (abs(d) < target) {
+        // fade pixels in and out based on z distance
+        float val = map(target - abs(d), 0, target, 80, 255);  
+        c = color(val, val, val/2);
+      }
+      z_pos = (z_pos+0.005);
+      if (z_pos > 350) z_pos = -350;
+  
+      noStroke();
+      if (xray == true){
+        fill(c,80);
+      } else {
+        fill(c);
+      }
+      pushMatrix();
+      translate(x, y, z);
+      sphere(12);
+      popMatrix();
     }
-    ci = (ci+0.005);
-    if (ci > 350) ci = -350;
-
-    fill(c);
-    pushMatrix();
-    translate(x, y, z);
-    box(20);
-    popMatrix();
   }
 }
-
-
-
-
-
-
-
-/// parking lot
 
 
 void draw_axes() {
   pushMatrix();
-  stroke(200);
+  stroke(200,150);
   textSize(60);
   fill(255);
   int label_loc = 500;
@@ -328,97 +418,4 @@ void draw_axes() {
   text("Z", 0, 0, label_loc);  // Specify a z-axis value
 
   popMatrix();
-}
-
-
-void new_draw_side(int side_num){
-  float angle = TWO_PI / 5;  // 72 degrees
-
-  // draw pentagon shape
-  pushMatrix();
-  rotateZ(PI/10);
-  beginShape();
-  fill(100);
-  for (int i = 0; i < 5; i++) {
-    // Calculate the x, y, z coordinates of each point on the pentagon
-    float x = radius * cos(angle * i);
-    float y = radius * sin(angle * i);
-    float z = 0;
-    vertex(x, y, z);
-  }
-  endShape(CLOSE);
-  popMatrix();
-
-  // draw center LED
-  rotateZ(angle/4);
-  drawLED(1);
-
-  // draw inner circle of 10 LEDs
-  rotateZ(PI*2/10);  // ring is rotated by one position
-  for (int i=0; i<10; i++) {
-    pushMatrix();
-    float rot = PI*2/10;
-    rotateZ(-rot*i);
-    translate(0, radius/2.5, 0);
-    drawLED(2+i);
-    popMatrix();
-  }
-  
-  // draw outer ring of 15 LEDs
-  rotateZ(-PI/5);  
-  for (int i=0; i<5; i++) {
-    pushMatrix();
-    rotateZ(-PI*2/5*i+radians(18));
-    translate(0, radius*0.65, 0);
-    for (int j=0; j<3; j++) {
-      pushMatrix();
-      translate(-60+j*60, 0, 0);
-      drawLED(12+i*3+j);
-      popMatrix();
-    }
-    popMatrix();
-  }
-  
-  // label the side number 
-  pushMatrix();
-  textSize(40);
-  fill(150,255,100);
-  rotateZ(PI/10*-5);
-  text(side_num, -10, -20, 2);  // Specify a z-axis value
-  popMatrix();
-
-  // label the five edges A-E
-  pushMatrix();
-  rotateZ(PI/10);
-  rotateZ(TWO_PI/5);  
-    
-  for (int side_label=0; side_label<5; side_label++){
-    char letter = char(side_label+65);
-    fill(0,0,0);  
-    textSize(20);
-    text(letter, -10, radius*0.8, 2);  // Specify a z-axis value
-    rotateZ(-TWO_PI/5);
-  }
-  popMatrix();
-
-}
-
-void new_draw_model() {
-  pushMatrix();
-  // top side (#0)
-  translate(0, 0, radius*1.30+2); // Center the shape in the canvas  
-  //rotateZ(TWO_PI/5);
-  new_draw_side(0);
-  popMatrix();
-  
-  // side #1
-  pushMatrix();
-  rotateZ(-TWO_PI/10*2);
-  rotateZ(radians(zv));
-  rotateY(radians(yv));
-  rotateX(radians(xv));
-  translate(0, 0, radius*1.30+2); // Center the shape in the canvas
-  new_draw_side(1);
-  popMatrix();
-  
 }
