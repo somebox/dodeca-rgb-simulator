@@ -28,7 +28,7 @@
  References:
  - Hackaday page: https://hackaday.io/project/192557-dodecargb
  - Homepage: (Jeremy Seitz): https://somebox.com/projects
- - Firmware: https://github.com/somebox/DodecaRGB-firmware
+ - Firmware and build instructions: https://github.com/somebox/DodecaRGB-firmware
  - Maths: https://math.stackexchange.com/questions/1320661/efficient-construction-of-a-dodecahedron
 
 
