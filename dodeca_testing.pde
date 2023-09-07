@@ -1,4 +1,5 @@
 import peasy.*;
+import processing.dxf.*;
 PeasyCam cam;
 PMatrix3D world;
 
@@ -35,6 +36,7 @@ PMatrix3D world;
 
 int led_counter = 0;
 boolean write_points = false;
+boolean record_dfx = false;
 
 // Appearance config
 color side_color = #8888AA;
@@ -50,12 +52,10 @@ int last_second = 0; // tracks the time
 String view_modes[] = {"normal", "bottom", "top", "build seq","3d points"};
 int build_step = 0; 
 
-float xv = 1.1071;  // angle between faces: PI - 2*Math.atan((1+Math.sqrt(5))/2), or around 63.4 degrees
-float zv = PI/10;  // pentagon top/bottom halves must be rotated 36 degrees in either direction to fit
-
+float xv = 1.1071;   // angle between faces: PI - 2*atan((1+sqrt(5))/2), or around 63.4 degrees
+float zv = 2*PI/20;  // pentagon top/bottom halves must be rotated 18 degrees in either direction to fit 
 float radius = 200;    
 int NUM_LEDS = 26*12;
-ArrayList<LedPoint> leds = new ArrayList();
 // The rotations of each pentagon face, 0-4 (60 degree increments)
 // This is important for aligning the PCBs correctly.
 int side_rotation[] = {0, 3, 4, 4, 4, 4, 2, 2, 2, 2, 4, 0};
@@ -75,6 +75,7 @@ class LedPoint {
     this.index = led_counter++;
   }
 }
+ArrayList<LedPoint> leds = new ArrayList();
 
 
 // Function to draw a pentagon, labels and LEDs in the current coordinates.
@@ -84,7 +85,7 @@ void drawPentagon(int sideNumber) {
   // rotate current side into position
   float ro = TWO_PI/5;
   if (sideNumber == 0) {  // bottom
-    rotateZ(radians(-18)-ro*2);
+    rotateZ(-zv-ro*2);
   } else if (sideNumber > 0 && sideNumber < 6) {  // bottom half
     rotateZ(ro*(sideNumber)+zv-ro);
     rotateX(xv);
@@ -92,12 +93,12 @@ void drawPentagon(int sideNumber) {
     rotateZ(ro*(sideNumber)-zv+ro*3);
     rotateX(PI - xv);
   } else if (sideNumber == 11) { // top
-    rotateX(radians(180));
-    rotateZ(radians(18));
+    rotateX(PI);
+    rotateZ(zv);
   }
 
   // Center the pentagon face in the canvas, used for drawing
-  translate(0, 0, radius*1.31); // roughly Math.atan(2+Math.sqrt(5)), trial-and-error 
+  translate(0, 0, radius*1.31); // roughly atan(2+sqrt(5)), trial-and-error 
 
   // label the current side with a big number
   pushMatrix();
@@ -154,7 +155,7 @@ void drawPentagon(int sideNumber) {
   // outer pentagon of 15 LEDs
   for (int i=0; i<5; i++) {
     pushMatrix();
-    rotateZ(-PI*2/5*i+radians(18));
+    rotateZ(-PI*2/5*i+zv);
     translate(0, radius*0.65, 0);
     for (int j=0; j<3; j++) {
       pushMatrix();
@@ -223,8 +224,9 @@ void show_HUD(){
   text("[v] view mode: "+view_modes[view_mode], 40, 30);
   text("[a] show axes: "+show_axes, 40, 50);
   text("[x] x-ray mode: "+xray, 40, 70);
-  text("[w] write data: "+(data_written > 0 ? "DONE!" : ""), 40, 90);
-  text("fps "+round(frameRate), 40, 110);
+  text("[w] write point data: "+(data_written > 0 ? "DONE!" : ""), 40, 90);
+  text("[d] write dfx file: "+(data_written > 0 ? "DONE!" : ""), 40, 110);
+  text("fps "+round(frameRate), 40, 130);
   cam.endHUD();
 }
 
@@ -245,6 +247,10 @@ void keyPressed() {
     led_counter = 0;
     view_mode = 0;
     data_written = 5; // delay is seconds for confirmation message in HUD
+    break;
+  case 'd': // write DFX file
+    record_dfx = true;
+    data_written = 5;
     break;
   }
 }
@@ -317,6 +323,9 @@ void setup() {
 
 
 void draw() {
+  if (record_dfx) {
+    beginRaw(DXF, "dodecaRGB.dxf");
+  }
   background(0);
   lights();
   directionalLight(100, 100, 100, 400, 400, 0);
@@ -328,12 +337,18 @@ void draw() {
   } else {
     draw_model();
   }
-  show_HUD();
+  if (!record_dfx){
+    show_HUD();
+  }
   if (millis()/1000 > last_second){
     last_second = millis()/1000;
     build_step = (build_step+1) % 12;
     data_written = max(0, data_written - 1);
   }
+  if (record_dfx) {
+    endRaw();
+    record_dfx = false;
+  }  
 }
 
 
