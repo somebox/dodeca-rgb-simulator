@@ -224,9 +224,8 @@ void show_HUD(){
   text("[v] view mode: "+view_modes[view_mode], 40, 30);
   text("[a] show axes: "+show_axes, 40, 50);
   text("[x] x-ray mode: "+xray, 40, 70);
-  text("[w] write point data: "+(data_written > 0 ? "DONE!" : ""), 40, 90);
-  text("[d] write dfx file: "+(data_written > 0 ? "DONE!" : ""), 40, 110);
-  text("fps "+round(frameRate), 40, 130);
+  text("[w] write data: "+(data_written > 0 ? "DONE!" : ""), 40, 90);
+  text("fps "+round(frameRate), 40, 110);
   cam.endHUD();
 }
 
@@ -243,14 +242,11 @@ void keyPressed() {
     break;
   case 'w':  // write data points and reset things
     write_points = true;
+    record_dfx = true;
     leds.clear();
     led_counter = 0;
     view_mode = 0;
     data_written = 5; // delay is seconds for confirmation message in HUD
-    break;
-  case 'd': // write DFX file
-    record_dfx = true;
-    data_written = 5;
     break;
   }
 }
@@ -275,8 +271,8 @@ void exportJSON() {
 void exportCArray() {
   // open a text file in data dir
   PrintWriter output = createWriter("data/points.h");
-  output.println("/*\r\nThis file was generated \r\n"+
-    "from a Processing sketch which outputs all of the points in the DodecaLED model.");
+  output.println("/*\r\nThis text and code below was generated from a Processing sketch\n"+
+    "which outputs all of the points in the DodecaLED model. See README.md for more info.");
   output.println("Generated on "+day()+"."+month()+"."+year()+" - "+hour()+":"+minute());
   output.println("radius: "+radius+" num_leds:"+NUM_LEDS);
   output.println("--------------");
@@ -286,7 +282,7 @@ void exportCArray() {
   for (LedPoint led : leds) {
     // write each point to the file as a C array
     // XYZ points[0] = {0, 0, 0};
-    output.println("XYZ(" + led.index +
+    output.println("LED_Point(" + led.index +
                      ", "+round(led.x*100)/100.0 +
                      ", "+round(led.y*100)/100.0 +
                      ", "+round(led.z*100)/100.0 +
@@ -324,7 +320,7 @@ void setup() {
 
 void draw() {
   if (record_dfx) {
-    beginRaw(DXF, "dodecaRGB.dxf");
+    beginRaw(DXF, "data/dodecaRGB.dxf");
   }
   background(0);
   lights();
@@ -340,10 +336,15 @@ void draw() {
   if (!record_dfx){
     show_HUD();
   }
-  if (millis()/1000 > last_second){
+  if (millis()/1000 > last_second){  // simple timer to handle UI updates every second
     last_second = millis()/1000;
-    build_step = (build_step+1) % 12;
-    data_written = max(0, data_written - 1);
+    build_step = (build_step+1) % 12;   // build animation view
+    data_written = max(0, data_written - 1);  // when writing files
+  }
+  if (write_points) {
+    exportJSON();
+    exportCArray();
+    write_points = false;
   }
   if (record_dfx) {
     endRaw();
@@ -363,12 +364,6 @@ void draw_model() {
     drawPentagon(i);
   }
   popMatrix();
-
-  if (write_points) {
-    exportJSON();
-    exportCArray();
-    write_points = false;
-  }
 }
 
 

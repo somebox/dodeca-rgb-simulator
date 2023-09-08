@@ -31,7 +31,6 @@ web-export/
 # Some specific to my workflow  #
 #################################
 out/
-output/
 savedImages/
 srcFiles/
 
